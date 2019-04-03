@@ -24,10 +24,18 @@
     <!--or something similar.-->
     <string name="app_name">Sunshine</string>
 
+    <!--By convention, "action" denotes that this String will be used as the label for an Action,-->
+    <!--typically from the action bar.  The ActionBar is limited real estate, so shorter is better.-->
+    <string name="action_map">Map Location</string>
+    <string name="action_share">Share</string>
 
-    <!--COMPLETED (1) Add a string for the title of the refresh button, "Refresh"-->
     <!--Used in overflow menu to refresh weather data-->
     <string name="action_refresh">Refresh</string>
+
+    <string name="error_message">
+        An error has occurred. Please try again by clicking REFRESH
+    </string>
+
 
     <!-- - - - - - - - - - - - - -->
     <!--Used by SunshineDateUtils-->
