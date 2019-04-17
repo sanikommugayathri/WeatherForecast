@@ -2,10 +2,17 @@ package com.example.gayat.weatherforecast;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.net.Uri;
-import android.os.AsyncTask;
+import android.support.v4.app.LoaderManager;
+import android.support.v4.content.CursorLoader;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v4.app.LoaderManager.LoaderCallbacks;
+import android.support.v4.content.AsyncTaskLoader;
+import android.support.v4.content.Loader;
 import android.os.Bundle;
+import android.support.v7.preference.PreferenceManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
@@ -15,94 +22,139 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.example.gayat.weatherforecast.data.SunshinePreferences;
+import com.example.gayat.weatherforecast.data.WeatherContract;
+import com.example.gayat.weatherforecast.utilities.FakeDataUtils;
 import com.example.gayat.weatherforecast.utilities.NetworkUtils;
 import com.example.gayat.weatherforecast.utilities.OpenWeatherJsonUtils;
 
 import java.net.URL;
 
-public class MainActivity extends AppCompatActivity implements ForecastAdapter.ForecastAdapterOnClickHandler {
 
-    private static final String TAG = MainActivity.class.getSimpleName();
+public class MainActivity extends AppCompatActivity implements
+        LoaderManager.LoaderCallbacks<Cursor>,
+        ForecastAdapter.ForecastAdapterOnClickHandler {
 
-    private RecyclerView mRecyclerView;
+    private final String TAG = MainActivity.class.getSimpleName();
+
+    public static final String[] MAIN_FORECAST_PROJECTION = {
+            WeatherContract.WeatherEntry.COLUMN_DATE,
+            WeatherContract.WeatherEntry.COLUMN_MAX_TEMP,
+            WeatherContract.WeatherEntry.COLUMN_MIN_TEMP,
+            WeatherContract.WeatherEntry.COLUMN_WEATHER_ID,
+    };
+
+    public static final int INDEX_WEATHER_DATE = 0;
+    public static final int INDEX_WEATHER_MAX_TEMP = 1;
+    public static final int INDEX_WEATHER_MIN_TEMP = 2;
+    public static final int INDEX_WEATHER_CONDITION_ID = 3;
+
+    private static final int ID_FORECAST_LOADER = 44;
+
     private ForecastAdapter mForecastAdapter;
-
-    private TextView mErrorMessageDisplay;
+    private RecyclerView mRecyclerView;
+    private int mPosition = RecyclerView.NO_POSITION;
 
     private ProgressBar mLoadingIndicator;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        getSupportActionBar().setElevation(0f);
 
-        /*
-         * Using findViewById, we get a reference to our RecyclerView from xml. This allows us to
-         * do things like set the adapter of the RecyclerView and toggle the visibility.
-         */
+        FakeDataUtils.insertFakeData(this);
+
         mRecyclerView = (RecyclerView) findViewById(R.id.recyclerview_forecast);
 
-        /* This TextView is used to display errors and will be hidden if there are no errors */
-        mErrorMessageDisplay = (TextView) findViewById(R.id.tv_error_message_display);
+        mLoadingIndicator = (ProgressBar) findViewById(R.id.pb_loading_indicator);
 
-        /*
-         * LinearLayoutManager can support HORIZONTAL or VERTICAL orientations. The reverse layout
-         * parameter is useful mostly for HORIZONTAL layouts that should reverse for right to left
-         * languages.
-         */
-        LinearLayoutManager layoutManager
-                = new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
+        LinearLayoutManager layoutManager =
+                new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false);
 
         mRecyclerView.setLayoutManager(layoutManager);
 
-        /*
-         * Use this setting to improve performance if you know that changes in content do not
-         * change the child layout size in the RecyclerView
-         */
         mRecyclerView.setHasFixedSize(true);
 
-        /*
-         * The ForecastAdapter is responsible for linking our weather data with the Views that
-         * will end up displaying our weather data.
-         */
-        mForecastAdapter = new ForecastAdapter(this);
 
-        /* Setting the adapter attaches it to the RecyclerView in our layout. */
+        mForecastAdapter = new ForecastAdapter(this, this);
+
         mRecyclerView.setAdapter(mForecastAdapter);
 
-        /*
-         * The ProgressBar that will indicate to the user that we are loading data. It will be
-         * hidden when no data is loading.
-         *
-         * Please note: This so called "ProgressBar" isn't a bar by default. It is more of a
-         * circle. We didn't make the rules (or the names of Views), we just follow them.
-         */
-        mLoadingIndicator = (ProgressBar) findViewById(R.id.pb_loading_indicator);
+        showLoading();
 
-        /* Once all of our views are setup, we can load the weather data. */
-        loadWeatherData();
+        getSupportLoaderManager().initLoader(ID_FORECAST_LOADER, null, this);
+
     }
 
-    /**
-     * This method will get the user's preferred location for weather, and then tell some
-     * background method to get the weather data in the background.
-     */
-    private void loadWeatherData() {
-        showWeatherDataView();
+    private void openPreferredLocationInMap() {
+        double[] coords = SunshinePreferences.getLocationCoordinates(this);
+        String posLat = Double.toString(coords[0]);
+        String posLong = Double.toString(coords[1]);
+        Uri geoLocation = Uri.parse("geo:" + posLat + "," + posLong);
 
-        String location = SunshinePreferences.getPreferredWeatherLocation(this);
-        new FetchWeatherTask().execute(location);
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setData(geoLocation);
+
+        if (intent.resolveActivity(getPackageManager()) != null) {
+            startActivity(intent);
+        } else {
+            Log.d(TAG, "Couldn't call " + geoLocation.toString() + ", no receiving apps installed!");
+        }
     }
 
-    /**
-     * This method is overridden by our MainActivity class in order to handle RecyclerView item
-     * clicks.
-     *
-     * @param weatherForDay The weather for the day that was clicked
-     */
+    @Override
+    public Loader<Cursor> onCreateLoader(int loaderId, Bundle bundle) {
+
+
+        switch (loaderId) {
+
+//          COMPLETED (22) If the loader requested is our forecast loader, return the appropriate CursorLoader
+            case ID_FORECAST_LOADER:
+                /* URI for all rows of weather data in our weather table */
+                Uri forecastQueryUri = WeatherContract.WeatherEntry.CONTENT_URI;
+                /* Sort order: Ascending by date */
+                String sortOrder = WeatherContract.WeatherEntry.COLUMN_DATE + " ASC";
+
+                String selection = WeatherContract.WeatherEntry.getSqlSelectForTodayOnwards();
+
+                return new CursorLoader(this,
+                        forecastQueryUri,
+                        MAIN_FORECAST_PROJECTION,
+                        selection,
+                        null,
+                        sortOrder);
+
+            default:
+                throw new RuntimeException("Loader Not Implemented: " + loaderId);
+        }
+    }
+
+    @Override
+    public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
+
+//      COMPLETED (27) Remove the previous body of onLoadFinished
+
+//      COMPLETED (28) Call mForecastAdapter's swapCursor method and pass in the new Cursor
+        mForecastAdapter.swapCursor(data);
+//      COMPLETED (29) If mPosition equals RecyclerView.NO_POSITION, set it to 0
+        if (mPosition == RecyclerView.NO_POSITION) mPosition = 0;
+//      COMPLETED (30) Smooth scroll the RecyclerView to mPosition
+        mRecyclerView.smoothScrollToPosition(mPosition);
+
+//      COMPLETED (31) If the Cursor's size is not equal to 0, call showWeatherDataView
+        if (data.getCount() != 0) showWeatherDataView();
+    }
+
+    @Override
+    public void onLoaderReset(Loader<Cursor> loader) {
+
+        mForecastAdapter.swapCursor(null);
+    }
+
+
     @Override
     public void onClick(String weatherForDay) {
         Context context = this;
@@ -112,103 +164,18 @@ public class MainActivity extends AppCompatActivity implements ForecastAdapter.F
         startActivity(intentToStartDetailActivity);
     }
 
-    /**
-     * This method will make the View for the weather data visible and
-     * hide the error message.
-     * <p>
-     * Since it is okay to redundantly set the visibility of a View, we don't
-     * need to check whether each view is currently visible or invisible.
-     */
     private void showWeatherDataView() {
-        /* First, make sure the error is invisible */
-        mErrorMessageDisplay.setVisibility(View.INVISIBLE);
-        /* Then, make sure the weather data is visible */
+        /* First, hide the loading indicator */
+        mLoadingIndicator.setVisibility(View.INVISIBLE);
+        /* Finally, make sure the weather data is visible */
         mRecyclerView.setVisibility(View.VISIBLE);
     }
 
-    /**
-     * This method will make the error message visible and hide the weather
-     * View.
-     * <p>
-     * Since it is okay to redundantly set the visibility of a View, we don't
-     * need to check whether each view is currently visible or invisible.
-     */
-    private void showErrorMessage() {
-        /* First, hide the currently visible data */
+    private void showLoading() {
+        /* Then, hide the weather data */
         mRecyclerView.setVisibility(View.INVISIBLE);
-        /* Then, show the error */
-        mErrorMessageDisplay.setVisibility(View.VISIBLE);
-    }
-
-    public class FetchWeatherTask extends AsyncTask<String, Void, String[]> {
-
-        @Override
-        protected void onPreExecute() {
-            super.onPreExecute();
-            mLoadingIndicator.setVisibility(View.VISIBLE);
-        }
-
-        @Override
-        protected String[] doInBackground(String... params) {
-
-            /* If there's no zip code, there's nothing to look up. */
-            if (params.length == 0) {
-                return null;
-            }
-
-            String location = params[0];
-            URL weatherRequestUrl = NetworkUtils.buildUrl(location);
-
-            try {
-                String jsonWeatherResponse = NetworkUtils
-                        .getResponseFromHttpUrl(weatherRequestUrl);
-
-                String[] simpleJsonWeatherData = OpenWeatherJsonUtils
-                        .getSimpleWeatherStringsFromJson(MainActivity.this, jsonWeatherResponse);
-
-                return simpleJsonWeatherData;
-
-            } catch (Exception e) {
-                e.printStackTrace();
-                return null;
-            }
-        }
-
-        @Override
-        protected void onPostExecute(String[] weatherData) {
-            mLoadingIndicator.setVisibility(View.INVISIBLE);
-            if (weatherData != null) {
-                showWeatherDataView();
-                mForecastAdapter.setWeatherData(weatherData);
-            } else {
-                showErrorMessage();
-            }
-        }
-    }
-
-    /**
-     * This method uses the URI scheme for showing a location found on a
-     * map. This super-handy intent is detailed in the "Common Intents"
-     * page of Android's developer site:
-     *
-     * @see <a"http://developer.android.com/guide/components/intents-common.html#Maps">
-     *
-     * Hint: Hold Command on Mac or Control on Windows and click that link
-     * to automagically open the Common Intents page
-     */
-    private void openLocationInMap() {
-        String addressString = "1600 Ampitheatre Parkway, CA";
-        Uri geoLocation = Uri.parse("geo:0,0?q=" + addressString);
-
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setData(geoLocation);
-
-        if (intent.resolveActivity(getPackageManager()) != null) {
-            startActivity(intent);
-        } else {
-            Log.d(TAG, "Couldn't call " + geoLocation.toString()
-                    + ", no receiving apps installed!");
-        }
+        /* Finally, show the loading indicator */
+        mLoadingIndicator.setVisibility(View.VISIBLE);
     }
 
     @Override
@@ -223,17 +190,15 @@ public class MainActivity extends AppCompatActivity implements ForecastAdapter.F
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
+
         int id = item.getItemId();
 
-        if (id == R.id.action_refresh) {
-            mForecastAdapter.setWeatherData(null);
-            loadWeatherData();
+        if (id == R.id.action_settings) {
+            startActivity(new Intent(this, SettingsActivity.class));
             return true;
         }
-
-        // COMPLETED (2) Launch the map when the map menu item is clicked
         if (id == R.id.action_map) {
-            openLocationInMap();
+            openPreferredLocationInMap();
             return true;
         }
 
