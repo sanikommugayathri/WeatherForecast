@@ -52,20 +52,20 @@ public class WeatherDbHelper extends SQLiteOpenHelper {
                          * WeatherEntry implements the interface, "BaseColumns", which does have a field
                          * named "_ID". We use that here to designate our table's primary key.
                          */
-                        WeatherContract.WeatherEntry._ID               + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                        WeatherContract.WeatherEntry._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
 
-                        WeatherContract.WeatherEntry.COLUMN_DATE       + " INTEGER NOT NULL, "                 +
+                        WeatherContract.WeatherEntry.COLUMN_DATE + " INTEGER NOT NULL, " +
 
-                        WeatherContract.WeatherEntry.COLUMN_WEATHER_ID + " INTEGER NOT NULL,"                  +
+                        WeatherContract.WeatherEntry.COLUMN_WEATHER_ID + " INTEGER NOT NULL," +
 
-                        WeatherContract.WeatherEntry.COLUMN_MIN_TEMP   + " REAL NOT NULL, "                    +
-                        WeatherContract.WeatherEntry.COLUMN_MAX_TEMP   + " REAL NOT NULL, "                    +
+                        WeatherContract.WeatherEntry.COLUMN_MIN_TEMP + " REAL NOT NULL, " +
+                        WeatherContract.WeatherEntry.COLUMN_MAX_TEMP + " REAL NOT NULL, " +
 
-                        WeatherContract.WeatherEntry.COLUMN_HUMIDITY   + " REAL NOT NULL, "                    +
-                        WeatherContract.WeatherEntry.COLUMN_PRESSURE   + " REAL NOT NULL, "                    +
+                        WeatherContract.WeatherEntry.COLUMN_HUMIDITY + " REAL NOT NULL, " +
+                        WeatherContract.WeatherEntry.COLUMN_PRESSURE + " REAL NOT NULL, " +
 
-                        WeatherContract.WeatherEntry.COLUMN_WIND_SPEED + " REAL NOT NULL, "                    +
-                        WeatherContract.WeatherEntry.COLUMN_DEGREES    + " REAL NOT NULL, "                    +
+                        WeatherContract.WeatherEntry.COLUMN_WIND_SPEED + " REAL NOT NULL, " +
+                        WeatherContract.WeatherEntry.COLUMN_DEGREES + " REAL NOT NULL, " +
 
                         /*
                          * To ensure this table can only contain one weather entry per date, we declare

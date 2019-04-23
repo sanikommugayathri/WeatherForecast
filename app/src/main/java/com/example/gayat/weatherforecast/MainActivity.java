@@ -79,7 +79,6 @@ public class MainActivity extends AppCompatActivity implements
         setContentView(R.layout.activity_main);
         getSupportActionBar().setElevation(0f);
 
-
         /*
          * Using findViewById, we get a reference to our RecyclerView from xml. This allows us to
          * do things like set the adapter of the RecyclerView and toggle the visibility.
@@ -136,10 +135,8 @@ public class MainActivity extends AppCompatActivity implements
         /* Setting the adapter attaches it to the RecyclerView in our layout. */
         mRecyclerView.setAdapter(mForecastAdapter);
 
+
         showLoading();
-
-        SunshineSyncUtils.startImmediateSync(this);
-
 
         /*
          * Ensures a loader is initialized and active. If the loader doesn't already exist, one is
@@ -147,6 +144,8 @@ public class MainActivity extends AppCompatActivity implements
          * the last created loader is re-used.
          */
         getSupportLoaderManager().initLoader(ID_FORECAST_LOADER, null, this);
+
+        SunshineSyncUtils.initialize(this);
 
     }
 
@@ -257,11 +256,9 @@ public class MainActivity extends AppCompatActivity implements
      * @param date Normalized UTC time that represents the local date of the weather in GMT time.
      * @see WeatherContract.WeatherEntry#COLUMN_DATE
      */
-//  COMPLETED (38) Refactor onClick to accept a long instead of a String as its parameter
     @Override
     public void onClick(long date) {
         Intent weatherDetailIntent = new Intent(MainActivity.this, DetailActivity.class);
-//      COMPLETED (39) Refactor onClick to pass the URI for the clicked date with the Intent
         Uri uriForDateClicked = WeatherContract.WeatherEntry.buildWeatherUriWithDate(date);
         weatherDetailIntent.setData(uriForDateClicked);
         startActivity(weatherDetailIntent);

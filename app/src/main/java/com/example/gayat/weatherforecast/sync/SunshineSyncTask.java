@@ -3,17 +3,27 @@ package com.example.gayat.weatherforecast.sync;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
+import android.text.format.DateUtils;
 
+import com.example.gayat.weatherforecast.data.SunshinePreferences;
 import com.example.gayat.weatherforecast.data.WeatherContract;
 import com.example.gayat.weatherforecast.utilities.NetworkUtils;
+import com.example.gayat.weatherforecast.utilities.NotificationUtils;
 import com.example.gayat.weatherforecast.utilities.OpenWeatherJsonUtils;
 
 import java.net.URL;
 
 public class SunshineSyncTask {
-    synchronized public static void syncWeather(Context context) {
 
-//      COMPLETED (3) Within syncWeather, fetch new weather data
+    /**
+     * Performs the network request for updated weather, parses the JSON from that request, and
+     * inserts the new weather information into our ContentProvider. Will notify the user that new
+     * weather has been loaded if the user hasn't been notified of the weather within the last day
+     * AND they haven't disabled notifications in the preferences screen.
+     *
+     * @param context Used to access utility methods and the ContentResolver
+     */
+    synchronized public static void syncWeather(Context context) {
 
         try {
             /*
@@ -40,7 +50,6 @@ public class SunshineSyncTask {
                 /* Get a handle on the ContentResolver to delete and insert data */
                 ContentResolver sunshineContentResolver = context.getContentResolver();
 
-//              COMPLETED (4) If we have valid results, delete the old data and insert the new
                 /* Delete old weather data because we don't need to keep multiple days' data */
                 sunshineContentResolver.delete(
                         WeatherContract.WeatherEntry.CONTENT_URI,
@@ -51,9 +60,38 @@ public class SunshineSyncTask {
                 sunshineContentResolver.bulkInsert(
                         WeatherContract.WeatherEntry.CONTENT_URI,
                         weatherValues);
-            }
 
-            /* If the code reaches this point, we have successfully performed our sync */
+                /*
+                 * Finally, after we insert data into the ContentProvider, determine whether or not
+                 * we should notify the user that the weather has been refreshed.
+                 */
+                boolean notificationsEnabled = SunshinePreferences.areNotificationsEnabled(context);
+
+                /*
+                 * If the last notification was shown was more than 1 day ago, we want to send
+                 * another notification to the user that the weather has been updated. Remember,
+                 * it's important that you shouldn't spam your users with notifications.
+                 */
+                long timeSinceLastNotification = SunshinePreferences
+                        .getEllapsedTimeSinceLastNotification(context);
+
+                boolean oneDayPassedSinceLastNotification = false;
+
+                if (timeSinceLastNotification >= DateUtils.DAY_IN_MILLIS) {
+                    oneDayPassedSinceLastNotification = true;
+                }
+
+                /*
+                 * We only want to show the notification if the user wants them shown and we
+                 * haven't shown a notification in the past day.
+                 */
+                if (notificationsEnabled && oneDayPassedSinceLastNotification) {
+                    NotificationUtils.notifyUserOfNewWeather(context);
+                }
+
+                /* If the code reaches this point, we have successfully performed our sync */
+
+            }
 
         } catch (Exception e) {
             /* Server probably invalid */
